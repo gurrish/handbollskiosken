@@ -3,7 +3,7 @@ import {
   ArrowLeft, ArrowRight, Check, Clock3, ExternalLink, ImagePlus, LoaderCircle,
   LogIn, LogOut, Maximize, Pause, Pencil, Play, Plus, ScreenShare, Trash2, X,
 } from "lucide-react";
-import { createSlide, deleteSlide, getSlides, getViewer, updateSlide } from "./lib/api";
+import { ApiError, createSlide, deleteSlide, getSlides, getViewer, updateSlide } from "./lib/api";
 import type { Slide, SlideInput, Viewer } from "./types";
 
 const blankForm = {
@@ -41,6 +41,20 @@ function slideInput(slide: Slide, isActive = slide.isActive): SlideInput {
     durationSeconds: slide.durationSeconds,
     isActive,
   };
+}
+
+function adminError(cause: unknown, fallback: string): string {
+  if (cause instanceof ApiError && cause.status === 401) {
+    return "Din inloggning verkar ha gått ut. Logga in igen och försök på nytt.";
+  }
+  if (cause instanceof ApiError && cause.status === 403) {
+    return "Det här kontot saknar global administratörsbehörighet.";
+  }
+  return cause instanceof Error ? cause.message : fallback;
+}
+
+function isAuthorizationError(cause: unknown): cause is ApiError {
+  return cause instanceof ApiError && (cause.status === 401 || cause.status === 403);
 }
 
 function signIn() {
@@ -130,21 +144,31 @@ function KioskPage() {
 
     <section className="kiosk-main" aria-label="Bildspel">
       {loading ? <div className="kiosk-empty"><LoaderCircle className="spin" size={34} /><p>Hämtar innehåll…</p></div>
-        : current ? <article className={`slide-display ${current.kind === "image" ? "slide-with-image" : "slide-with-link"}`} key={current.id}>
-          <div className="slide-copy">
-            <span className="slide-label"><span className="slide-label-mark" /> FRÅN VÅR FÖRENING</span>
-            <h1>{current.title}</h1>
-            {current.description && <p>{current.description}</p>}
-            {current.kind === "link" && current.url && <a className="slide-destination" href={current.url} target="_blank" rel="noreferrer">
-              <span>{current.url}</span><ExternalLink size={19} aria-hidden="true" />
-            </a>}
-            <div className="slide-footnote"><span>HANDBOLL. GEMENSKAP. GLÄDJE.</span><span>{String(index + 1).padStart(2, "0")} <i>/</i> {String(slides.length).padStart(2, "0")}</span></div>
-          </div>
-          <div className="slide-visual">
-            {current.kind === "image" && current.imageUrl
-              ? <img src={current.imageUrl} alt={current.title} />
-              : <div className="link-visual"><span className="court-line court-line-one" /><span className="court-line court-line-two" /><span className="court-ball">H</span><span className="link-visual-caption">LÄS MER<br />OM OSS</span></div>}
-          </div>
+        : current ? <article className={`slide-display slide-display-${current.kind}`} key={current.id}>
+          {current.kind === "image" && current.imageUrl
+            ? <img className="slide-image" src={current.imageUrl} alt={current.title} />
+            : current.kind === "link" && current.url
+              ? <>
+                <iframe
+                  className="slide-frame"
+                  src={current.url}
+                  title={current.title}
+                  referrerPolicy="no-referrer"
+                  sandbox="allow-scripts allow-forms allow-popups"
+                />
+                <div className="slide-overlay">
+                  <div className="slide-overlay-copy">
+                    <span className="slide-label">HANDBOLLSKIOSKEN</span>
+                    <h1>{current.title}</h1>
+                    {current.description && <p>{current.description}</p>}
+                  </div>
+                  <div className="embed-note">
+                    <span>Vissa webbplatser tillåter inte inbäddning.</span>
+                    <a href={current.url} target="_blank" rel="noreferrer">Öppna sidan separat <ExternalLink size={15} /></a>
+                  </div>
+                </div>
+              </>
+              : null}
         </article>
           : <div className="kiosk-empty">
             <span className="empty-mark"><ScreenShare size={33} /></span>
@@ -184,7 +208,12 @@ function AdminPage() {
       setViewer(account);
       setSlides(account.isAdmin ? await getSlides(true) : []);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Det gick inte att hämta kioskens innehåll.");
+      if (isAuthorizationError(cause)) {
+        setViewer((current) => cause.status === 401
+          ? { signedIn: false, email: null, isAdmin: false }
+          : { ...current, isAdmin: false });
+      }
+      setError(adminError(cause, "Det gick inte att hämta kioskens innehåll."));
     } finally {
       setLoading(false);
     }
@@ -196,13 +225,24 @@ function AdminPage() {
     setSaving(true);
     setError("");
     try {
-      if (editing) await updateSlide(editing.id, input);
-      else await createSlide(input);
+      const saved = editing
+        ? await updateSlide(editing.id, input)
+        : await createSlide(input);
+      setSlides((current) => {
+        const updated = editing
+          ? current.map((slide) => slide.id === saved.id ? saved : slide)
+          : [...current, saved];
+        return updated.sort((first, second) => first.position - second.position || first.createdAt.localeCompare(second.createdAt));
+      });
       setEditorOpen(false);
       setEditing(null);
-      await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Det gick inte att spara innehållet.");
+      if (isAuthorizationError(cause)) {
+        setViewer((current) => cause.status === 401
+          ? { signedIn: false, email: null, isAdmin: false }
+          : { ...current, isAdmin: false });
+      }
+      setError(adminError(cause, "Det gick inte att spara innehållet."));
     } finally {
       setSaving(false);
     }
@@ -212,10 +252,15 @@ function AdminPage() {
     setSaving(true);
     setError("");
     try {
-      await updateSlide(slide.id, slideInput(slide, !slide.isActive));
-      await refresh();
+      const updated = await updateSlide(slide.id, slideInput(slide, !slide.isActive));
+      setSlides((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Det gick inte att uppdatera innehållet.");
+      if (isAuthorizationError(cause)) {
+        setViewer((current) => cause.status === 401
+          ? { signedIn: false, email: null, isAdmin: false }
+          : { ...current, isAdmin: false });
+      }
+      setError(adminError(cause, "Det gick inte att uppdatera innehållet."));
     } finally {
       setSaving(false);
     }
@@ -227,9 +272,14 @@ function AdminPage() {
     setError("");
     try {
       await deleteSlide(slide.id);
-      await refresh();
+      setSlides((current) => current.filter((item) => item.id !== slide.id));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Det gick inte att ta bort innehållet.");
+      if (isAuthorizationError(cause)) {
+        setViewer((current) => cause.status === 401
+          ? { signedIn: false, email: null, isAdmin: false }
+          : { ...current, isAdmin: false });
+      }
+      setError(adminError(cause, "Det gick inte att ta bort innehållet."));
     } finally {
       setSaving(false);
     }
@@ -352,7 +402,7 @@ function SlideEditor({ slide, saving, error, onClose, onSubmit }: SlideEditorPro
         </label>}
         <label className="form-control"><span>Rubrik</span><input autoFocus required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Till exempel: Nästa hemmamatch" /></label>
         <label className="form-control"><span>Beskrivning <small>VALFRITT</small></span><textarea maxLength={500} rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Lägg till information som ska synas på skärmen." /></label>
-        {form.kind === "link" && <label className="form-control"><span>Länkadress</span><input type="url" required maxLength={2048} value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://exempel.se" /></label>}
+        {form.kind === "link" && <label className="form-control"><span>Länkadress</span><input type="url" required maxLength={2048} value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://exempel.se" /><small className="form-help">Webbsidan visas inbäddad i bildspelet. Vissa webbplatser blockerar inbäddning.</small></label>}
         <div className="editor-options">
           <label className="form-control"><span>Visningstid</span><select value={form.durationSeconds} onChange={(event) => setForm({ ...form, durationSeconds: Number(event.target.value) })}>{[10, 15, 20, 30, 45, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} sekunder</option>)}</select></label>
           <label className="toggle-control"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Visa på skärmen</span></label>

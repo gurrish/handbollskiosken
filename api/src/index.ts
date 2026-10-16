@@ -8,6 +8,30 @@ interface Identity {
   email: string;
 }
 
+interface PrincipalClaim {
+  typ: string;
+  val: string;
+}
+
+interface ClientPrincipal {
+  userDetails: string;
+  userId: string;
+  claims?: PrincipalClaim[];
+}
+
+function isPrincipalClaim(value: unknown): value is PrincipalClaim {
+  return Boolean(value && typeof value === "object"
+    && "typ" in value && typeof value.typ === "string"
+    && "val" in value && typeof value.val === "string");
+}
+
+function isClientPrincipal(value: unknown): value is ClientPrincipal {
+  return Boolean(value && typeof value === "object"
+    && "userDetails" in value && typeof value.userDetails === "string"
+    && "userId" in value && typeof value.userId === "string"
+    && (!("claims" in value) || (Array.isArray(value.claims) && value.claims.every(isPrincipalClaim))));
+}
+
 type PublicSlide = Omit<Slide, "imageContentType" | "imageName"> & { imageUrl: string | null };
 
 class HttpError extends Error {
@@ -26,11 +50,15 @@ function identity(request: HttpRequest): Identity | undefined {
   if (!encoded) return undefined;
 
   try {
-    const principal: unknown = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
-    if (!principal || typeof principal !== "object" || !("userDetails" in principal) || !("userId" in principal)) return undefined;
-    const { userDetails, userId } = principal;
-    if (typeof userDetails !== "string" || typeof userId !== "string" || !userDetails.includes("@")) return undefined;
-    return { id: userId, email: userDetails.trim().toLowerCase() };
+    const parsed: unknown = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+    if (!isClientPrincipal(parsed)) return undefined;
+    const principal = parsed;
+    const claimEmail = principal.claims?.find((claim) =>
+      /(?:email|upn|preferred_username)/i.test(claim.typ) && claim.val.includes("@"),
+    )?.val;
+    const email = principal.userDetails.includes("@") ? principal.userDetails : claimEmail;
+    if (!email) return undefined;
+    return { id: principal.userId, email: email.trim().toLowerCase() };
   } catch {
     return undefined;
   }

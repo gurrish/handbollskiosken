@@ -1,5 +1,12 @@
 import type { Slide, SlideInput, Viewer } from "../types";
 
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -7,10 +14,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const email = localStorage.getItem("handbollskiosken-dev-email");
     if (email !== null) headers.set("x-dev-user-email", email);
   }
-  const response = await fetch(path, { ...init, headers });
+  const response = await fetch(path, { ...init, headers, credentials: "include", cache: "no-store" });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(payload?.error || `Något gick fel (felkod ${response.status}).`);
+    throw new ApiError(payload?.error || `Något gick fel (felkod ${response.status}).`, response.status);
   }
   return response.json() as Promise<T>;
 }

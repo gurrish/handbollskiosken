@@ -8,11 +8,11 @@ Handbollskiosken visar ett automatiskt bildspel på en skärm vid handbollsplane
 - Azure Static Web Apps med integrerat Azure Functions-API.
 - Azure Table Storage för bildspelsinnehåll och en privat Blob Storage-container för uppladdade bilder.
 - Static Web Apps inbyggd Microsoft Entra ID-inloggning. API:et kontrollerar den betrodda Static Web Apps-identiteten och `GLOBAL_ADMIN_EMAILS` vid varje ändring.
-- Bicep skapar Static Web App, Storage Account och Application Insights. GitHub Actions distribuerar webbplatsen och infrastrukturen med Azure OIDC.
+- Bicep definierar Static Web App, Storage Account och Application Insights. Infrastrukturen distribueras manuellt en gång; GitHub Actions distribuerar webbplatsen och API:et.
 
 Functions-API:et använder serverinställningen `STORAGE_CONNECTION_STRING` för lagring. Den skapas av Bicep och skickas aldrig till webbläsaren eller sparas i källkoden. Blob Storage är privat.
 
-Bilder får vara JPEG, PNG eller WebP och högst 8 MB. API:et kontrollerar bildens faktiska signatur, inte bara filnamn eller webbläsarens MIME-typ. Bildspelsinlägg kan visas i 5–120 sekunder. Inaktiva inlägg visas inte i bildspelet.
+Bilder får vara JPEG, PNG eller WebP och högst 8 MB. API:et kontrollerar bildens faktiska signatur, inte bara filnamn eller webbläsarens MIME-typ. Länkinlägg visar den externa webbsidan inbäddad i bildspelet; vissa webbplatser blockerar visning i en inbäddad ram och behöver då öppnas separat. Bildspelsinlägg kan visas i 5–120 sekunder. Inaktiva inlägg visas inte i bildspelet.
 
 ## Lokal utveckling
 
@@ -63,41 +63,34 @@ npm run build
 
 ## Distribuera till Azure
 
-### 1. Konfigurera Azure och GitHub
+### 1. Skapa och distribuera infrastrukturen manuellt
 
 - Skapa en Azure-resursgrupp.
-- Skapa en Entra-appregistrering/tjänsteprincipal för infrastrukturdistribution och ge den rollen Contributor på resursgruppen.
-- Konfigurera dess federerade GitHub OIDC-uppgifter med utfärdare `https://token.actions.githubusercontent.com`, målgrupp `api://AzureADTokenExchange` och ämne `repo:<OWNER>/handbollskiosken:ref:refs/heads/main`.
-- Lägg till GitHub-hemligheterna `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` och `SWA_DEPLOYMENT_TOKEN` (efter den första infrastrukturdistributionen).
-- Lägg till GitHub-variablerna `AZURE_RESOURCE_GROUP` och `GLOBAL_ADMIN_EMAILS` (kommaavgränsade inloggningsadresser). `NAME_PREFIX` är valfri och standardvärdet är `handbollskiosken`.
-
-Azure-inloggningen använder OIDC; skapa ingen Entra-klienthemlighet.
-
-### 2. Distribuera infrastrukturen
-
-Skicka en ändring under `infra/**` till `main`, eller starta **Deploy infrastructure** i GitHub Actions. För lokal distribution från en inloggad Azure CLI:
+- Kör Bicep-distributionen från en inloggad Azure CLI. Ange administratörsadresserna som en kommaavgränsad lista:
 
 ```powershell
 az login
 az deployment group create `
   --resource-group <resursgrupp> `
   --template-file infra/main.bicep `
-  --parameters namePrefix=handbollskiosken globalAdminEmails=<admin-e-post>
+  --parameters namePrefix=handbollskiosken globalAdminEmails="<admin-e-post>"
 ```
 
-Använd utdata `staticWebAppName` för att hämta deployment-token:
+Infrastrukturen är en engångsmanuell distribution. Om Bicep-mallen eller infrastrukturen senare ändras, kör distributionen igen manuellt. Ändringar av `GLOBAL_ADMIN_EMAILS` görs också genom att distribuera Bicep på nytt.
+
+Använd utdata `staticWebAppName` från distributionen för att hämta webbplatsens deployment-token:
 
 ```powershell
 az staticwebapp secrets list --name <static-web-app-namn> --resource-group <resursgrupp> --query properties.apiKey --output tsv
 ```
 
-Spara token som GitHub-hemligheten `SWA_DEPLOYMENT_TOKEN`. Skicka sedan en programändring till `main` eller starta **Build and deploy application** för att publicera webbplats och API.
+Spara token som GitHub-hemligheten `SWA_DEPLOYMENT_TOKEN`. GitHub Actions använder den för att bygga och distribuera webbplatsen och API:et när programändringar skickas till `main`, eller när **Build and deploy application** startas manuellt. GitHub Actions distribuerar inte Azure-infrastrukturen och behöver inga Azure OIDC-hemligheter.
 
 Logga in med en adress i `GLOBAL_ADMIN_EMAILS` för att hantera bildspelet. Webbplatsen använder Static Web Apps inbyggda `aad`-inloggning. Ingen egen identitetsleverantör är konfigurerad. Ange administratörsvariabeln innan redigering används.
 
 ### Azure-resurser och namn
 
-Bicep distribuerar infrastrukturen som mall; resurser finns inte förrän den har körts i Azure. `namePrefix` påverkar namn på Static Web App, Storage Account och Application Insights.
+Bicep definierar infrastrukturen som mall; resurser finns inte förrän den manuella distributionen har körts i Azure. `namePrefix` påverkar namn på Static Web App, Storage Account och Application Insights.
 
 ## API och åtkomst
 

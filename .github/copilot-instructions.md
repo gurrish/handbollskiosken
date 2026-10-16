@@ -4,7 +4,7 @@
 
 Handbollskiosken is a public slideshow for a display outside a handball court. The slideshow can show uploaded images and link cards. Only email addresses configured in `GLOBAL_ADMIN_EMAILS` may sign in and create, edit, activate/deactivate, or delete content.
 
-The frontend is React, TypeScript, and Vite. The backend is an Azure Functions API integrated with Azure Static Web Apps. Slideshow metadata is stored in Azure Table Storage; uploaded images are stored in a private Azure Blob Storage container. Azure resources are provisioned with Bicep and deployed using GitHub Actions with OIDC.
+The frontend is React, TypeScript, and Vite. The backend is an Azure Functions API integrated with Azure Static Web Apps. Slideshow metadata is stored in Azure Table Storage; uploaded images are stored in a private Azure Blob Storage container. Azure resources are defined in Bicep and deployed manually; GitHub Actions deploys the application and API using a Static Web Apps deployment token.
 
 The website is for a Swedish audience. All visible interface text, accessibility labels, validation messages, and page metadata must be in Swedish. Do not add language switching or English UI copy.
 
@@ -19,7 +19,7 @@ The website is for a Swedish audience. All visible interface text, accessibility
 - `api/src/repository.ts`: repository interface, in-memory development store, and Azure Table/Blob implementation.
 - `public/staticwebapp.config.json`: Static Web Apps routing and API runtime configuration.
 - `infra/`: Bicep entry point and resource modules.
-- `.github/workflows/`: application and infrastructure build/deploy workflows.
+- `.github/workflows/`: application build/deploy workflow.
 - `README.md`: local setup, deployment, and API documentation.
 
 ## Code conventions
@@ -57,6 +57,6 @@ The website is for a Swedish audience. All visible interface text, accessibility
 ## Infrastructure and deployment
 
 - Define Azure resources in Bicep under `infra/` and reuse the existing modules where practical.
-- Keep the Static Web Apps integrated Functions architecture and GitHub OIDC federation. Do not add a client-secret requirement for Azure login.
-- Keep workflow triggers and README deployment instructions aligned with infrastructure parameters, secrets, variables, routes, or build paths.
+- Keep the Static Web Apps integrated Functions architecture. Azure infrastructure is deployed manually; do not add an infrastructure GitHub Actions workflow unless explicitly requested.
+- The application deployment workflow uses the `SWA_DEPLOYMENT_TOKEN` GitHub secret. Keep its triggers and README instructions aligned with app build paths.
 - Infrastructure is not deployed just because Bicep templates exist; state deployment status explicitly.
