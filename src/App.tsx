@@ -156,17 +156,6 @@ function KioskPage() {
                   referrerPolicy="no-referrer"
                   sandbox="allow-scripts allow-forms allow-popups"
                 />
-                <div className="slide-overlay">
-                  <div className="slide-overlay-copy">
-                    <span className="slide-label">HANDBOLLSKIOSKEN</span>
-                    <h1>{current.title}</h1>
-                    {current.description && <p>{current.description}</p>}
-                  </div>
-                  <div className="embed-note">
-                    <span>Vissa webbplatser tillåter inte inbäddning.</span>
-                    <a href={current.url} target="_blank" rel="noreferrer">Öppna sidan separat <ExternalLink size={15} /></a>
-                  </div>
-                </div>
               </>
               : null}
         </article>
@@ -402,7 +391,7 @@ function SlideEditor({ slide, saving, error, onClose, onSubmit }: SlideEditorPro
         </label>}
         <label className="form-control"><span>Rubrik</span><input autoFocus required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Till exempel: Nästa hemmamatch" /></label>
         <label className="form-control"><span>Beskrivning <small>VALFRITT</small></span><textarea maxLength={500} rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Lägg till information som ska synas på skärmen." /></label>
-        {form.kind === "link" && <label className="form-control"><span>Länkadress</span><input type="url" required maxLength={2048} value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://exempel.se" /><small className="form-help">Webbsidan visas inbäddad i bildspelet. Vissa webbplatser blockerar inbäddning.</small></label>}
+        {form.kind === "link" && <label className="form-control"><span>Länkadress</span><input type="url" required maxLength={2048} value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://exempel.se" /><small className="form-help">Webbsidan visas direkt i bildspelet.</small></label>}
         <div className="editor-options">
           <label className="form-control"><span>Visningstid</span><select value={form.durationSeconds} onChange={(event) => setForm({ ...form, durationSeconds: Number(event.target.value) })}>{[10, 15, 20, 30, 45, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} sekunder</option>)}</select></label>
           <label className="toggle-control"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><span>Visa på skärmen</span></label>

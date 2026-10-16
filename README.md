@@ -12,7 +12,7 @@ Handbollskiosken visar ett automatiskt bildspel på en skärm vid handbollsplane
 
 Functions-API:et använder serverinställningen `STORAGE_CONNECTION_STRING` för lagring. Den skapas av Bicep och skickas aldrig till webbläsaren eller sparas i källkoden. Blob Storage är privat.
 
-Bilder får vara JPEG, PNG eller WebP och högst 8 MB. API:et kontrollerar bildens faktiska signatur, inte bara filnamn eller webbläsarens MIME-typ. Länkinlägg visar den externa webbsidan inbäddad i bildspelet; vissa webbplatser blockerar visning i en inbäddad ram och behöver då öppnas separat. Bildspelsinlägg kan visas i 5–120 sekunder. Inaktiva inlägg visas inte i bildspelet.
+Bilder får vara JPEG, PNG eller WebP och högst 8 MB. API:et kontrollerar bildens faktiska signatur, inte bara filnamn eller webbläsarens MIME-typ. Länkinlägg visar den externa webbsidan inbäddad i bildspelet. Bildspelsinlägg kan visas i 5–120 sekunder. Inaktiva inlägg visas inte i bildspelet.
 
 ## Lokal utveckling
 
